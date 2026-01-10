@@ -18,7 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <stdio.h>
+#include <stdio.h> // sprintf için gerekli
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -45,12 +45,14 @@ CAN_HandleTypeDef hcan1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+CAN_RxHeaderTypeDef rxHeader; // Gelen mesajın başlığı (ID, DLC vb.)
 uint8_t rxData[8];            // Gelen veri (Payload)
 
 const float WHEEL_DIAMETER_METERS = 0.56;
 const float GEAR_RATIO = 4.0;
 const float PI_VALUE = 3.14159265;
 const uint32_t KLS_MESSAGE1_ID = 0x0CF11E05;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -58,13 +60,11 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_USART2_UART_Init(void);
-/* USER CODE BEGIN PFP */
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_CAN1_Init(void);
-static void MX_USART2_UART_Init(void);
+
 void CAN_Filter_Config(void); // Filtre ayar fonksiyonumuz
 float convertRpmToKmh(float motorRpm);
+/* USER CODE BEGIN PFP */
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -104,61 +104,106 @@ int main(void)
   MX_CAN1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  /* CAN Filtre Ayarlarını Yükle ve Başlat */
   CAN_Filter_Config();
+
+  /* CAN Modülünü Başlat */
   if (HAL_CAN_Start(&hcan1) != HAL_OK)
   {
     // Hata durumunda burada takılır
     Error_Handler();
   }
+
   char msgBuffer[100]; // UART üzerinden göndermek için string tamponu
 
   // Ekrana başlangıç mesajı atalım
   sprintf(msgBuffer, "STM32 CAN BUS Dinlemesi Baslatildi\r\n");
   HAL_UART_Transmit(&huart2, (uint8_t*)msgBuffer, strlen(msgBuffer), 100);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* Polling Yöntemi (Loop içinde kontrol) */
+	   /* Polling Yöntemi (Loop içinde kontrol) */
 
-    // FIFO 0'da okunacak mesaj var mı kontrol et
-    if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0)
-    {
-      // Mesajı oku
-      if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rxHeader, rxData) == HAL_OK)
-      {
-        // Arduino'daki: if (canMsg.can_id & CAN_EFF_FLAG) kontrolü
-        // STM32'de IDE (Identifier Extension) kontrolü yapılır
-        if (rxHeader.IDE == CAN_ID_EXT)
-        {
-          // ID Kontrolü (Maskeleme yapmaya gerek yok, header direkt ID'yi verir)
-          if (rxHeader.ExtId == KLS_MESSAGE1_ID)
-          {
-            uint8_t rpmLSB = rxData[0];
-            uint8_t rpmMSB = rxData[1];
+	    // FIFO 0'da okunacak mesaj var mı kontrol et
+	    if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) > 0)
+	    {
+	      // Mesajı oku
+	      if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &rxHeader, rxData) == HAL_OK)
+	      {
+	        // Arduino'daki: if (canMsg.can_id & CAN_EFF_FLAG) kontrolü
+	        // STM32'de IDE (Identifier Extension) kontrolü yapılır
+	        if (rxHeader.IDE == CAN_ID_EXT)
+	        {
+	          // ID Kontrolü (Maskeleme yapmaya gerek yok, header direkt ID'yi verir)
+	          if (rxHeader.ExtId == KLS_MESSAGE1_ID)
+	          {
+	            uint8_t rpmLSB = rxData[0];
+	            uint8_t rpmMSB = rxData[1];
 
-            uint16_t rawRpm = (rpmMSB << 8) | rpmLSB;
+	            uint16_t rawRpm = (rpmMSB << 8) | rpmLSB;
 
-            float vehicleSpeed = convertRpmToKmh((float)rawRpm);
+	            float vehicleSpeed = convertRpmToKmh((float)rawRpm);
 
-            // Veriyi UART üzerinden PC'ye gönder (Serial Monitor gibi)
-            // Not: STM32'de float yazdırmak için proje ayarlarından float printf desteğini açmanız gerekebilir.
-            // Alternatif olarak tam sayıya çevirip basabilirsiniz: (int)vehicleSpeed
-            sprintf(msgBuffer, "RPM: %d -> Hiz: %d km/h\r\n", rawRpm, (int)vehicleSpeed);
-            HAL_UART_Transmit(&huart2, (uint8_t*)msgBuffer, strlen(msgBuffer), 100);
-          }
-        }
-      }
-    }
+	            // Veriyi UART üzerinden PC'ye gönder (Serial Monitor gibi)
+	            // Not: STM32'de float yazdırmak için proje ayarlarından float printf desteğini açmanız gerekebilir.
+	            // Alternatif olarak tam sayıya çevirip basabilirsiniz: (int)vehicleSpeed
+	            sprintf(msgBuffer, "RPM: %d -> Hiz: %d km/h\r\n", rawRpm, (int)vehicleSpeed);
+	            HAL_UART_Transmit(&huart2, (uint8_t*)msgBuffer, strlen(msgBuffer), 100);
+	          }
+	        }
+	      }
+	    }
 
-    // Çok hızlı dönmesini engellemek için ufak bir gecikme
-    HAL_Delay(10);
-  }
+	    // Çok hızlı dönmesini engellemek için ufak bir gecikme
+	    HAL_Delay(10);
+	  }
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
 }
 
-  float convertRpmToKmh(float motorRpm) {
+float convertRpmToKmh(float motorRpm) {
+  float wheelRpm = motorRpm / GEAR_RATIO;
+  float wheelCircumference = PI_VALUE * WHEEL_DIAMETER_METERS;
+  float speedMetersPerMinute = wheelRpm * wheelCircumference;
+  float speedKmh = speedMetersPerMinute * 0.06;
+  return speedKmh;
+}
+
+void CAN_Filter_Config(void)
+{
+  CAN_FilterTypeDef canfilterconfig;
+
+  canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
+  canfilterconfig.FilterBank = 0; // 0. Bankı kullan
+  canfilterconfig.FilterFIFOAssignment = CAN_RX_FIFO0; // FIFO 0'a at
+  canfilterconfig.FilterIdHigh = 0x0000;
+  canfilterconfig.FilterIdLow = 0x0000;
+  canfilterconfig.FilterMaskIdHigh = 0x0000;
+  canfilterconfig.FilterMaskIdLow = 0x0000;
+  canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  canfilterconfig.FilterScale = CAN_FILTERSCALE_32BIT;
+
+  /*
+     Yukarıdaki ayar (Mask = 0) "Promiscuous Mode"dur.
+     Yani TÜM CAN ID'lerini kabul eder.
+     Eğer sadece KLS_MESSAGE1_ID (0x0CF11E05) geçsin isterseniz
+     Mask ve ID alanlarını o ID'ye göre hesaplayıp doldurmanız gerekir.
+     Başlangıç için her şeyi dinlemek (Mask=0) hata ayıklamayı kolaylaştırır.
+  */
+
+  if (HAL_CAN_ConfigFilter(&hcan1, &canfilterconfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+  /* USER CODE END 3 */
+
+
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -219,8 +264,8 @@ static void MX_CAN1_Init(void)
   hcan1.Init.Prescaler = 16;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan1.Init.TimeSeg1 = CAN_BS1_2TQ;
-  hcan1.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_1TQ;
+  hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan1.Init.TimeTriggeredMode = DISABLE;
   hcan1.Init.AutoBusOff = DISABLE;
   hcan1.Init.AutoWakeUp = DISABLE;
@@ -282,7 +327,6 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
