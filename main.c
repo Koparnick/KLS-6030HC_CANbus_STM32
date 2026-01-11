@@ -52,6 +52,8 @@ const float WHEEL_DIAMETER_METERS = 0.56;
 const float GEAR_RATIO = 4.0;
 const float PI_VALUE = 3.14159265;
 const uint32_t KLS_MESSAGE1_ID = 0x0CF11E05;
+uint8_t teker_acisi;
+
 
 /* USER CODE END PV */
 
@@ -368,3 +370,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
