@@ -1,3 +1,5 @@
+![Uploading image.png…]()
+
 # KLS6030HC STM32 CAN-Bus Reader
 
 This project enables an STM32F407V Discovery board to read data from a KLS6030HC motor driver via CAN-Bus and transmit parsed metrics (RPM, Speed, Current) over UART.
